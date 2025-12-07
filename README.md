@@ -48,6 +48,45 @@ A modern, full-stack business management application built with React, Flask, an
 - **File Validation**: File type and size validation
 - **Organized Storage**: Structured file organization
 
+## 📸 Screenshots & Demo
+
+### 🎥 Demo Video
+Experience SmartBiz360 in action with our comprehensive demo video:
+
+<video width="100%" controls style="max-width: 800px; border-radius: 8px; margin: 20px 0;">
+  <source src="./assets/07.12.2025_17.06.16_REC.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+### Application Screenshots
+
+#### Dashboard Overview
+![Dashboard Overview](./assets/images/Screenshot_1.png)
+
+#### Project Management
+![Project Management](./assets/images/Screenshot_2.png)
+
+#### CRM Interface
+![CRM Interface](./assets/images/Screenshot_3.png)
+
+#### Inventory Management
+![Inventory Management](./assets/images/Screenshot_4.png)
+
+#### Product Catalog
+![Product Catalog](./assets/images/Screenshot_5.png)
+
+#### Financial Analytics
+![Financial Analytics](./assets/images/Screenshot_6.png)
+
+#### Human Resources
+![Human Resources](./assets/images/Screenshot_7.png)
+
+#### Order Management
+![Order Management](./assets/images/Screenshot_8.png)
+
+#### Reports & Analytics
+![Reports & Analytics](./assets/images/Screenshot_9.png)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
