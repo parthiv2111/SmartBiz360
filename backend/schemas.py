@@ -144,8 +144,10 @@ class ProjectSchema(Schema):
     budget = fields.Decimal(places=2)
     start_date = fields.Date()
     end_date = fields.Date()
+    progress = fields.Int()
     manager_id = fields.UUID()
     tasks = fields.Nested(TaskSchema, many=True, dump_only=True)
+    created_at = fields.DateTime(dump_only=True)
 
 class LeadSchema(Schema):
     id = fields.UUID(dump_only=True)

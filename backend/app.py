@@ -18,14 +18,34 @@ from routes.projects import projects_bp
 from routes.finance import finance_bp
 from routes.inventory_ext import inventory_ext_bp
 from routes.crm import crm_bp
+from websocket_server import init_websocket, start_background_tasks
 
 
 def create_app(config_name='default'):
     app = Flask(__name__)
     
+    # Ensure .env file exists with JWT_SECRET_KEY before loading config
+    # This prevents logout on server restart
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if not os.path.exists(env_path):
+        print("⚠️  .env file not found. Creating one with secure keys...")
+        try:
+            from create_env import create_env_file
+            create_env_file()
+        except Exception as e:
+            print(f"⚠️  Could not auto-create .env: {e}")
+            print("📝 Please create a .env file manually with JWT_SECRET_KEY set")
+    
     # Load configuration
     from config import config
     app.config.from_object(config[config_name])
+    
+    # Verify JWT_SECRET_KEY is set (not using default)
+    jwt_secret = app.config.get('JWT_SECRET_KEY', '')
+    if not jwt_secret or jwt_secret == 'jwt-secret-key-change-in-production':
+        print("⚠️  WARNING: JWT_SECRET_KEY is using default value!")
+        print("⚠️  This will cause users to be logged out on server restart.")
+        print("📝 Please set JWT_SECRET_KEY in your .env file")
     
     # Initialize extensions
     db.init_app(app)
@@ -33,7 +53,20 @@ def create_app(config_name='default'):
     jwt = JWTManager(app)
     
     # Configure CORS
-    CORS(app, origins=app.config['CORS_ORIGINS'])
+    CORS(
+        app,
+        resources={r"/*": {"origins": app.config['CORS_ORIGINS']}},
+        supports_credentials=app.config.get('CORS_SUPPORTS_CREDENTIALS', True),
+        methods=app.config.get('CORS_METHODS', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']),
+        allow_headers=app.config.get('CORS_ALLOW_HEADERS', ['*']),
+        expose_headers=app.config.get('CORS_EXPOSE_HEADERS', ['Content-Type', 'Authorization']),
+        vary_header=True,
+        always_send=True,
+        max_age=86400
+    )
+    
+    # Initialize WebSocket
+    socketio = init_websocket(app)
     
     # Create upload directory
     upload_folder = app.config['UPLOAD_FOLDER']
@@ -106,8 +139,14 @@ def create_app(config_name='default'):
             'error': 'Bad request'
         }), 400
     
-    return app
+    return app, socketio
+
+# Create app instance for Flask-Migrate
+app, socketio = create_app()
 
 if __name__ == '__main__':
-    app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Start background tasks for WebSocket updates
+    start_background_tasks()
+    
+    # Run the application with SocketIO support
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)

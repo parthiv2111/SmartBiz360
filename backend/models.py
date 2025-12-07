@@ -282,11 +282,27 @@ class Project(db.Model):
     budget = db.Column(db.Numeric(12, 2))
     start_date = db.Column(db.Date)
     end_date = db.Column(db.Date)
+    progress = db.Column(db.Integer, default=0)
     manager_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     manager = db.relationship('User', backref='managed_projects')
     tasks = db.relationship('Task', backref='project', lazy=True, cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'description': self.description,
+            'status': self.status,
+            'budget': float(self.budget) if self.budget is not None else None,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'progress': int(self.progress) if self.progress is not None else 0,
+            'manager_id': str(self.manager_id) if self.manager_id else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -298,6 +314,29 @@ class Task(db.Model):
     due_date = db.Column(db.Date)
     
     assignee = db.relationship('User', backref='tasks')
+
+
+class ProjectActivity(db.Model):
+    __tablename__ = 'project_activity'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = db.Column(UUID(as_uuid=True), db.ForeignKey('projects.id'), nullable=False)
+    actor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    diff = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    project = db.relationship('Project', backref='activities')
+    actor = db.relationship('User', backref='project_activities')
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'project_id': str(self.project_id),
+            'actor_id': str(self.actor_id) if self.actor_id else None,
+            'action': self.action,
+            'diff': self.diff,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 
 class Lead(db.Model):
     __tablename__ = 'leads'
@@ -348,3 +387,36 @@ class PurchaseOrder(db.Model):
     order_date = db.Column(db.Date, default=datetime.utcnow().date)
     
     supplier = db.relationship('Supplier', backref='purchase_orders')
+
+class PasswordResetOTP(db.Model):
+    __tablename__ = 'password_reset_otps'
+    
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    otp_code = db.Column(db.String(6), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    is_used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref='password_reset_otps')
+    
+    def __repr__(self):
+        return f'<PasswordResetOTP {self.email}>'
+    
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+    
+    def is_valid(self):
+        return not self.is_used and not self.is_expired()
+    
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'user_id': str(self.user_id),
+            'email': self.email,
+            'expires_at': self.expires_at.isoformat(),
+            'is_used': self.is_used,
+            'created_at': self.created_at.isoformat()
+        }

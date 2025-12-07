@@ -1,10 +1,8 @@
 from flask import Blueprint, jsonify, request
-from models import db, Product, Customer, Order, OrderItem
+from models import db, Product, Customer, Order, OrderItem, Expense, Lead, Deal
 from sqlalchemy import func, desc
 from datetime import datetime, timedelta
 from decimal import Decimal
-from models import Expense
-from sqlalchemy import func
 
 analytics_bp = Blueprint('analytics', __name__)
 
@@ -23,8 +21,10 @@ def get_analytics_overview():
             Customer.created_at >= thirty_days_ago
         ).count()
         
-        # Conversion rate (mock data for now)
-        conversion_rate = Decimal('3.24')
+        # Conversion rate: leads converted to deals / total leads
+        total_leads = Lead.query.count()
+        converted_leads = Lead.query.filter(Lead.status.in_(['Converted', 'Qualified'])).count()
+        conversion_rate = (converted_leads / total_leads * 100) if total_leads > 0 else Decimal('0.0')
         
         # Average order value
         avg_order_value = db.session.query(
@@ -33,14 +33,32 @@ def get_analytics_overview():
             Order.status != 'Cancelled'
         ).scalar() or Decimal('0.0')
         
-        # Customer satisfaction (mock data)
-        customer_satisfaction = Decimal('98.5')
+        # Customer satisfaction: Based on repeat customer rate (customers with 2+ orders)
+        repeat_customers = db.session.query(func.count(Customer.id)).select_from(Customer).join(Order).group_by(Customer.id).having(func.count(Order.id) >= 2).count()
+        total_customers_with_orders = db.session.query(func.count(Customer.id)).select_from(Customer).join(Order).distinct().scalar() or 1
+        customer_satisfaction = (repeat_customers / total_customers_with_orders * 100) if total_customers_with_orders > 0 else Decimal('0.0')
         
-        # Profit margin (mock data)
-        profit_margin = Decimal('24.3')
+        # Profit margin: (Revenue - Expenses) / Revenue * 100
+        total_expenses = db.session.query(func.sum(Expense.amount)).scalar() or Decimal('0.0')
+        profit = total_revenue - total_expenses
+        profit_margin = (profit / total_revenue * 100) if total_revenue > 0 else Decimal('0.0')
         
-        # Average delivery time (mock data)
-        avg_delivery_time = Decimal('2.4')
+        # Average delivery time: Days from order creation to completion
+        completed_orders = Order.query.filter(
+            Order.status == 'Completed',
+            Order.created_at.isnot(None),
+            Order.updated_at.isnot(None)
+        ).all()
+        if completed_orders:
+            delivery_times = []
+            for order in completed_orders:
+                if order.created_at and order.updated_at:
+                    days = (order.updated_at - order.created_at).days
+                    if days >= 0:
+                        delivery_times.append(days)
+            avg_delivery_time = Decimal(sum(delivery_times) / len(delivery_times)) if delivery_times else Decimal('0.0')
+        else:
+            avg_delivery_time = Decimal('0.0')
         
         return jsonify({
             'success': True,

@@ -14,6 +14,10 @@ import uuid
 
 auth_bp = Blueprint('auth', __name__)
 
+@auth_bp.route('/auth/login', methods=['OPTIONS'])
+def login_options():
+    return ('', 204)
+
 @auth_bp.route('/auth/register', methods=['POST'])
 def register():
     """Register a new user"""
@@ -282,7 +286,7 @@ def update_profile():
 
 @auth_bp.route('/auth/forgot-password', methods=['POST'])
 def forgot_password():
-    """Send password reset email (placeholder)"""
+    """Send OTP for password reset"""
     try:
         data = request.get_json()
         email = data.get('email')
@@ -293,21 +297,75 @@ def forgot_password():
                 'error': 'Email is required'
             }), 400
         
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            # Don't reveal if email exists or not
+        # Import services
+        from services.otp_service import otp_service
+        from services.email_service import email_service
+        
+        # Create OTP for user
+        otp_result = otp_service.create_otp_for_user(email)
+        
+        if not otp_result['success']:
+            # Don't reveal if email exists or not for security
             return jsonify({
                 'success': True,
-                'message': 'If the email exists, a password reset link has been sent'
+                'message': 'If the email exists, an OTP has been sent to your email address'
             }), 200
         
-        # TODO: Implement email sending logic here
-        # For now, just return success
+        # Send OTP email
+        email_sent = email_service.send_otp_email(
+            to_email=email,
+            otp_code=otp_result.get('otp_code', ''),
+            user_name=otp_result.get('user_name')
+        )
         
+        if email_sent:
+            return jsonify({
+                'success': True,
+                'message': 'OTP has been sent to your email address',
+                'expires_at': otp_result.get('expires_at')
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to send OTP email. Please try again.'
+            }), 500
+        
+    except Exception as e:
         return jsonify({
-            'success': True,
-            'message': 'If the email exists, a password reset link has been sent'
-        }), 200
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@auth_bp.route('/auth/verify-otp', methods=['POST'])
+def verify_otp():
+    """Verify OTP code"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        otp_code = data.get('otp_code')
+        
+        if not email or not otp_code:
+            return jsonify({
+                'success': False,
+                'error': 'Email and OTP code are required'
+            }), 400
+        
+        from services.otp_service import otp_service
+        
+        # Verify OTP
+        verification_result = otp_service.verify_otp(email, otp_code)
+        
+        if verification_result['success']:
+            return jsonify({
+                'success': True,
+                'message': 'OTP verified successfully',
+                'user_id': verification_result.get('user_id')
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': verification_result['error']
+            }), 400
         
     except Exception as e:
         return jsonify({
@@ -317,24 +375,82 @@ def forgot_password():
 
 @auth_bp.route('/auth/reset-password', methods=['POST'])
 def reset_password():
-    """Reset password with token (placeholder)"""
+    """Reset password with OTP verification"""
     try:
         data = request.get_json()
-        token = data.get('token')
+        email = data.get('email')
+        otp_code = data.get('otp_code')
         new_password = data.get('password')
         
-        if not token or not new_password:
+        if not email or not otp_code or not new_password:
             return jsonify({
                 'success': False,
-                'error': 'Token and new password are required'
+                'error': 'Email, OTP code, and new password are required'
             }), 400
         
-        # TODO: Implement token validation and password reset logic
-        # For now, just return success
+        # Import services
+        from services.otp_service import otp_service
+        from services.email_service import email_service
+        
+        # Verify OTP first
+        verification_result = otp_service.verify_otp(email, otp_code)
+        
+        if not verification_result['success']:
+            return jsonify({
+                'success': False,
+                'error': verification_result['error']
+            }), 400
+        
+        # Get user and update password
+        user = User.query.get(verification_result['user_id'])
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        # Update password
+        user.set_password(new_password)
+        db.session.commit()
+        
+        # Send success email
+        email_service.send_password_reset_success_email(
+            to_email=email,
+            user_name=f"{user.first_name} {user.last_name}".strip()
+        )
         
         return jsonify({
             'success': True,
-            'message': 'Password reset successfully'
+            'message': 'Password has been reset successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@auth_bp.route('/auth/otp-status', methods=['POST'])
+def otp_status():
+    """Check OTP status for an email"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        from services.otp_service import otp_service
+        
+        status = otp_service.get_otp_status(email)
+        
+        return jsonify({
+            'success': True,
+            'data': status
         }), 200
         
     except Exception as e:

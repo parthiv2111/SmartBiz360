@@ -9,7 +9,18 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # CORS Configuration
-    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    # Comma-separated env var CORS_ORIGINS overrides the defaults below
+    CORS_ORIGINS = os.environ.get(
+        'CORS_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://172.21.192.1:8080,http://10.167.206.102:8080'
+    ).split(',')
+    CORS_SUPPORTS_CREDENTIALS = True
+    CORS_ALLOW_HEADERS = [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With'
+    ]
+    CORS_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
     
     # Pagination
     DEFAULT_PAGE_SIZE = 10
